@@ -4,27 +4,6 @@
 #include <condition_variable>
 #include <atomic>
 
-/**
- * Round Robin Scheduler Simulator (C++)
- * - Supports N CPU cores (threads)
- * - Fixed or dynamic quantum
- * - I/O block and unblock (single I/O event between two CPU bursts)
- * - Dynamic process insertion (optional stdin listener)
- * - Text Gantt output + metrics (waiting, turnaround, context switches, CPU util.)
- *
- * Build:  g++ -std=gnu++17 -O2 -pthread rr_simulator.cpp -o rr
- * Run:    ./rr --file input.txt --cores 2 --quantum 2
- *         ./rr --file input.txt --cores 4 --quantum 3 --dynamic --minq 1 --maxq 8
- *         ./rr --file input.txt --cores 2 --quantum 2 --interactive
- *
- * Input file format (pipe-separated):
- *   ID | TempoChegada | Execucao1 | Bloqueio?(S/N) | Espera | Execucao2
- * Example:
- *   P1 | 0 | 4 | S | 3 | 2
- *   P2 | 1 | 5 | N | 0 | 0
- *   P3 | 2 | 3 | S | 4 | 1
- */
-
 using namespace std;
 
 struct Process {
@@ -56,7 +35,7 @@ struct Options {
     bool dynamicQ = false;
     int minQ = 1;
     int maxQ = 20;
-    bool interactive = false;  // habilita thread de inserção manual via stdin
+    // bool interactive = false;  // habilita thread de inserção manual via stdin
 };
 
 // ---------------------------- Globals ----------------------------
@@ -149,9 +128,9 @@ static void loadFile(const string& path) {
     }
 }
 
-// Inserção dinâmica via stdin (opcional)
-static void interactiveInserter() {
-    // Formato: exatamente como o arquivo, mesma linha com pipes
+// Inserção dinâmica via stdin (opcional, prof por favor faça pelo arquivo txt <3)
+/* static void () {
+    // Formato: exatamente como o arquivo, mesma linha com pipezinhos
     // Ex.:  P4 | 7 | 3 | S | 2 | 4
     string line;
     while (!shutdownFlag.load()) {
@@ -185,7 +164,7 @@ static void interactiveInserter() {
             cerr << "[interactive] Processo " << parts[0] << " cadastrado para chegada em t=" << parts[1] << "\n";
         }
     }
-}
+}*/
 
 // ---------------------------- Núcleo (thread) ----------------------------
 static void coreWorker(int cid) {
@@ -312,9 +291,9 @@ static void parseArgs(int argc, char** argv) {
         else if (a == "--dynamic") { OPT.dynamicQ = true; }
         else if (a == "--minq") { need(i); OPT.minQ = max(1, stoi(argv[++i])); }
         else if (a == "--maxq") { need(i); OPT.maxQ = max(1, stoi(argv[++i])); }
-        else if (a == "--interactive") { OPT.interactive = true; }
+        // else if (a == "--interactive") { OPT.interactive = true; }
         else if (a == "--help") {
-            cout << "Uso: ./rr --file input.txt --cores N --quantum Q [--dynamic --minq A --maxq B] [--interactive]\n";
+            cout << "Uso: ./rr --file input.txt --cores N --quantum Q [--dynamic --minq A --maxq B] \n";
             exit(0);
         }
     }
@@ -375,7 +354,7 @@ int main(int argc, char** argv) {
     CORES.assign(OPT.cores, Core{});
 
     thread inserter;
-    if (OPT.interactive) inserter = thread(interactiveInserter);
+    // if (OPT.interactive) inserter = thread(interactiveInserter);
 
     // Cria threads de núcleo
     vector<thread> workers;
