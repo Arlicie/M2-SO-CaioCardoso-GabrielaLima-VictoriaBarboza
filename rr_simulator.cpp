@@ -183,50 +183,56 @@ static void coreWorker(int cid) {  // o parâmetro cid (Core ID) identifica qual
             break;
         }
 
-        string pid = CORES[cid].currentPid;
-        if (!pid.empty()) {
+        string pid = CORES[cid].currentPid; // pega o id do processo atual e se estiver vazio, significa que o núcleo não tem processo atribuído nesse tick
+        if (!pid.empty()) { // se o núcleo tem um processo ativo, buscamos a estrutura p correspondente no dicionário global PROC (tabela de processos)
             auto &p = PROC[pid];
-            // Executa 1 tick
-            p.remaining--; p.quantumRemaining--; p.cpuTime++;
-            CORES[cid].timeline.push_back(pid);
-            busySlots++;
 
-            bool released = false;
+            // Executa 1 tick
+            p.remaining--; p.quantumRemaining--; p.cpuTime++; 
+            // remaining-- diminui o tempo restante total de CPU para esse processo
+            // uantumRemaining-- diminui o quantum restante (quanto tempo ainda pode executar antes da preempção)
+            // p.cpuTime++ contabiliza o tempo de CPU usado
+
+            CORES[cid].timeline.push_back(pid); // o ID do processo é registrado na linha do tempo (timeline) para o gráfico de Gantt
+            busySlots++; // registra que o núcleo esteve ocupado nesse tick (para calcular uso da CPU depois)
+
+            bool released = false; 
+            // variável de controle: vai indicar se o processo saiu do núcleo (por término, bloqueio ou preempção)
+
             // Verifica fim de burst / I/O / quantum
             if (p.remaining == 0) {
-                if (p.phase == 1 && p.hasIO) {
-                    // Vai para bloqueado (I/O)
-                    p.state = "BLOQUEADO";
-                    blocked[pid] = p.ioWait; // inicia espera de I/O
-                    p.phase = 2;
-                    p.remaining = max(0, p.exec2);
-                    CORES[cid].currentPid.clear();
-                    released = true;
+                if (p.phase == 1 && p.hasIO) { // se ele ainda está na primeira fase (phase == 1) e possui operação de entrada/saída (I/O)
+                    p.state = "BLOQUEADO"; // vai para bloqueado (I/O)
+                    blocked[pid] = p.ioWait; // é colocado na lista blocked com seu tempo de espera (p.ioWait)
+                    p.phase = 2; // vai para a segunda fase (phase = 2) que será executada depois que o I/O terminar
+                    p.remaining = max(0, p.exec2); // o tempo de CPU da segunda fase é definido (p.remaining = p.exec2)
+                    CORES[cid].currentPid.clear(); // o núcleo é liberado (currentPid.clear())
+                    released = true; // marca released = true
                 } else {
-                    // Finaliza
-                    p.state = "FINALIZADO";
+                    // se não há mais I/O, o processo foi completamente executado
+                    p.state = "FINALIZADO"; // estado fica como finalizado
                     p.finishTime = T + 1; // termina ao final do tick atual
                     CORES[cid].currentPid.clear();
                     released = true;
                 }
-            } else if (p.quantumRemaining == 0) {
+            } else if (p.quantumRemaining == 0) { // se o quantum acabou, aplica a preempção Round Robin
                 // Preempção RR
-                p.state = "PRONTO";
-                readyQ.push_back(pid);
-                p.ctxSwitches++;
-                CORES[cid].currentPid.clear();
+                p.state = "PRONTO"; // estado marcado como pronto
+                readyQ.push_back(pid); // processo volta para a fila de prontos
+                p.ctxSwitches++; // mais uma troca de conteto
+                CORES[cid].currentPid.clear(); // nucleo é liberado
                 released = true;
             }
 
             if (!released) {
-                // Continua no core no próximo tick
+                // continua no core no próximo tick
             }
         } else {
-            // ocioso
+            // caso não haja processo atribuído ao núcleo ele fica ocioso e isso é marcado no gaant
             CORES[cid].timeline.push_back("-");
         }
 
-        // sinaliza ACK do tick
+        // sinaliza ACK do tick e acorda a thread principal
         CORES[cid].acked = true;
         if (++acks == (int)CORES.size()) cv_all_ack.notify_one();
     }
@@ -235,15 +241,38 @@ static void coreWorker(int cid) {  // o parâmetro cid (Core ID) identifica qual
 // ---------------------------- Agendador (thread principal) ----------------------------
 static void assignIdleCoresLocked() {
     // Atribui processos PRONTO aos núcleos ociosos (Round Robin)
-    for (size_t c = 0; c < CORES.size(); ++c) {
-        if (!CORES[c].currentPid.empty()) continue;
+
+    for (size_t c = 0; c < CORES.size(); ++c) { // loop sobre todos os núcleos (CORES)
+
+        // se o núcleo já possui um processo atribuído (currentPid não vazio), pula para o próximo núcleo, só considera núcleos ociosos
+        if (!CORES[c].currentPid.empty()) continue; 
+
+        // se não há nenhum processo pronto na fila (readyQ vazia), pula; nenhum trabalho a atribuir
         if (readyQ.empty()) continue;
+
+
+        // retira o primeiro processo da fila de prontos (FIFO). readyQ.front() obtém o id do processo; pop_front() remove esse id da fila. 
+        // isso implementa a ordem de chegada/re-entradas do Round Robin.
         string pid = readyQ.front(); readyQ.pop_front();
+
+        // obtém referência direta ao registro do processo na tabela PROC
         auto &p = PROC[pid];
+
+        // marca o sate como exceuctando
         p.state = "EXECUTANDO";
-        if (p.startTime < 0) p.startTime = T; // primeira vez que roda
+
+        // Se essa é a primeira vez que o processo foi executado (startTime inicializado com valor negativo), 
+        // grava o tempo atual T como tempo de início, oq serve para métricas como tempo de resposta/turnaround
+        if (p.startTime < 0) p.startTime = T;
+
+        // Define o quantum (fatia de tempo) que o processo receberá neste escalonamento e 
+        // a função currentQuantum calcula o quantum de acordo com política (fixo ou dinâmico)
         p.quantumRemaining = currentQuantum((int)readyQ.size());
+
         p.ctxSwitches++; // ativação conta como troca
+
+        // atribui o prcesso ao núcleo, grava o pid em CORES[c].currentPid, 
+        // indica que o núcleo c dverá executar esse processo no próximo tick
         CORES[c].currentPid = pid;
     }
 }
@@ -360,7 +389,13 @@ int main(int argc, char** argv) {
     thread inserter;
     // if (OPT.interactive) inserter = thread(interactiveInserter);
 
+
+    //**
     // Cria threads de núcleo
+    // é uma função que calcula o quantum com base na quantidade de processos prontos (readyCount),
+    // ou seja, o tamanho da fila de prontos no momento, se não houver processos prontos, o quantum padrão é 1
+    // a regra é para que cada 3 processos prontos adicionais, o quantum é aumentado em 1 unidade.
+    //  */
     vector<thread> workers;
     for (int c = 0; c < OPT.cores; ++c) workers.emplace_back(coreWorker, c);
 
