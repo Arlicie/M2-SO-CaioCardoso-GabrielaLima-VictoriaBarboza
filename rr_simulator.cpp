@@ -167,15 +167,19 @@ static void loadFile(const string& path) {
 }*/
 
 // ---------------------------- Núcleo (thread) ----------------------------
-static void coreWorker(int cid) {
-    while (true) {
-        unique_lock<mutex> lk(mtx);
-        cv_tick.wait(lk, [&]{ return CORES[cid].acked == false || shutdownFlag.load(); });
+// esssa função é executada por uma thread separada para cada núcleo da CPU.
+static void coreWorker(int cid) {  // o parâmetro cid (Core ID) identifica qual núcleo está sendo simulado
+    while (true) { // cada núcleo trabalha dentro de um loop infinito, simula o funcionamento contínuo do processador e só sai do loop quando o simulador for encerrado (controlado pelo shutdownFlag)
+        unique_lock<mutex> lk(mtx); // é usado mutex para coordenar o acesso entre threads
+        cv_tick.wait(lk, [&]{ return CORES[cid].acked == false || shutdownFlag.load(); }); // cv_tick faz com que a thread(nucleo) durma até o proximo tempo de tick comece
+        // o lambda é a condição de espera, só segue quando o tick for atual for confirmado (mais pra baixo) ou quandoo o simulador estiver encerrado
+
+        // verifica se o simulador foi encerrado (shutdownFlag ativado) e o núcleo está ocioso (currentPid.empty())
         if (shutdownFlag.load() && CORES[cid].acked == false && CORES[cid].currentPid.empty()) {
             // Libera e sai
-            CORES[cid].timeline.push_back("-");
-            CORES[cid].acked = true;
-            if (++acks == (int)CORES.size()) cv_all_ack.notify_one();
+            CORES[cid].timeline.push_back("-"); // adiciona um - na linha do tempo que indica inatividade
+            CORES[cid].acked = true; // reconhece o tick atual
+            if (++acks == (int)CORES.size()) cv_all_ack.notify_one(); // incrementa o contador global
             break;
         }
 
