@@ -35,7 +35,6 @@ struct Options {
     bool dynamicQ = false;
     int minQ = 1;
     int maxQ = 20;
-    // bool interactive = false;  // habilita thread de inserção manual via stdin
 };
 
 // ---------------------------- Globals ----------------------------
@@ -127,44 +126,6 @@ static void loadFile(const string& path) {
         PROC[p.id] = std::move(p);
     }
 }
-
-// Inserção dinâmica via stdin (opcional, prof por favor faça pelo arquivo txt <3)
-/* static void () {
-    // Formato: exatamente como o arquivo, mesma linha com pipezinhos
-    // Ex.:  P4 | 7 | 3 | S | 2 | 4
-    string line;
-    while (!shutdownFlag.load()) {
-        if (!getline(cin, line)) break; // EOF
-        line = trim(line);
-        if (line.empty()) continue;
-        auto parts = splitPipe(line);
-        if (parts.size() != 6) {
-            cerr << "[interactive] Linha ignorada (formato inválido): " << line << "\n";
-            continue;
-        }
-        Process p;
-        try {
-            p.id = parts[0];
-            p.arrival = stoi(parts[1]);
-            p.exec1 = stoi(parts[2]);
-            p.hasIO = (parts[3] == "S" || parts[3] == "s");
-            p.ioWait = stoi(parts[4]);
-            p.exec2 = stoi(parts[5]);
-            p.remaining = p.exec1;
-            p.state = "NOVO";
-        } catch (...) {
-            cerr << "[interactive] Erro ao parsear linha: " << line << "\n";
-            continue;
-        }
-        lock_guard<mutex> lk(mtx);
-        if (PROC.count(p.id)) {
-            cerr << "[interactive] ID duplicado: " << p.id << "\n";
-        } else {
-            PROC[p.id] = std::move(p);
-            cerr << "[interactive] Processo " << parts[0] << " cadastrado para chegada em t=" << parts[1] << "\n";
-        }
-    }
-}*/
 
 // ---------------------------- Núcleo (thread) ----------------------------
 // esssa função é executada por uma thread separada para cada núcleo da CPU.
