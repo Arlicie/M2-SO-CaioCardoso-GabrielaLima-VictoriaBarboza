@@ -1,0 +1,14 @@
+./rr --file input1.txt --cores 2 --quantum 2
+./rr --file input1.txt --cores 2 --quantum 2 --dynamic --minq 1 --maxq 8
+./rr --file input1.txt --cores 6 --quantum 2
+./rr --file input1.txt --cores 6 --quantum 2 --dynamic --minq 1 --maxq 8
+
+a, mas por que usar o minimo e maximo??
+R: No Round-Robin dinâmico, definir valores mínimo e máximo para o quantum é 
+importante para manter o comportamento estável do escalonador. O limite mínimo 
+evita que o quantum se torne pequeno demais, o que causaria excesso de trocas 
+de contexto e desperdício de processamento. Já o limite máximo impede que o 
+quantum cresça demais, garantindo que o sistema não perca responsividade e 
+continue justo com processos menores ou interativos. Dessa forma, os limites 
+ajudam a equilibrar desempenho e justiça entre os processos, evitando extremos q
+ue poderiam prejudicar o funcionamento do sistema.

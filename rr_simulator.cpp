@@ -239,41 +239,52 @@ static void assignIdleCoresLocked() {
 }
 
 static void moveArrivalsLocked() {
-    for (auto &kv : PROC) {
-        auto &p = kv.second;
-        if (p.state == "NOVO" && p.arrival <= T) {
+    for (auto &kv : PROC) { // itera sobre todos os processos armazenados em PROC
+        auto &p = kv.second;// cra uma referência p para o processo (valor do map), facilitando o acesso às suas variáveis sem precisar escrever kv.second altas vezes
+        if (p.state == "NOVO" && p.arrival <= T) { // condição que verifica se o processo ainda não entrou no sistema, 
+        // ou seja, foi declarado, mas nunca ficou pronto para execução e também verifica o tempo atual da simulação (T) atingiu ou ultrapassou o tempo de chegada programado (arrival) do processo.
             p.state = "PRONTO";
-            readyQ.push_back(p.id);
+            readyQ.push_back(p.id); // insere o processo na fila de prontos no final da fila
         }
     }
 }
 
+
 static void progressBlockedLocked() {
-    vector<string> toReady;
-    for (auto it = blocked.begin(); it != blocked.end(); ) {
-        it->second--;
-        if (it->second <= 0) { toReady.push_back(it->first); it = blocked.erase(it); }
-        else ++it;
+    vector<string> toReady; // lista temporária para processos que vão voltar ao estado PRONTO
+    for (auto it = blocked.begin(); it != blocked.end(); ) {  
+        it->second--; // decrementa o tempo restante de bloqueio (I/O) do processo
+        if (it->second <= 0) { // se o tempo de I/O terminou
+            toReady.push_back(it->first); // guarda o PID para mover depois
+            it = blocked.erase(it); // remove da lista de bloqueados e avança o iterador
+        } else {
+            ++it; // senão, só avança o iterador
+        }
     }
-    for (auto &pid : toReady) {
-        auto &p = PROC[pid];
-        p.state = "PRONTO";
-        readyQ.push_back(pid);
+    for (auto &pid : toReady) { // para cada processo que terminou I/O
+        auto &p = PROC[pid]; // obtém o PCB do processo
+        p.state = "PRONTO"; // muda estado para PRONTO
+        readyQ.push_back(pid); // coloca o PID na fila de prontos
     }
 }
 
+
 static void accrueWaitingLocked() {
-    for (auto &kv : PROC) if (kv.second.state == "PRONTO") kv.second.waitTime++;
+    for (auto &kv : PROC) // percorre todos os processos
+        if (kv.second.state == "PRONTO") // se o processo está pronto, esperando CPU
+            kv.second.waitTime++; // incrementa tempo de espera
 }
 
 static bool everyoneFinalOrNewLocked() {
-    // usado para decidir quando encerrar sem travar em espera
-    for (auto &kv : PROC) {
-        const auto &s = kv.second.state;
-        if (s != "FINALIZADO" && s != "NOVO") return false;
+    // usado para saber se já podemos encerrar a simulação sem deadlock
+    for (auto &kv : PROC) { // percorre todos os processos
+        const auto &s = kv.second.state; // lê o estado atual
+        if (s != "FINALIZADO" && s != "NOVO") // se alguém ainda está executando, pronto, ou bloqueado
+            return false; // não terminou ainda
     }
-    return true;
+    return true; // todos estão FINALIZADOS ou nunca chegaram -> fim seguro
 }
+
 
 static void parseArgs(int argc, char** argv) {
     for (int i = 1; i < argc; ++i) {
